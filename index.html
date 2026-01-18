@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logistics Elite Dashboard V10</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+        :root { --bg-dark: #020617; --card-bg: #0f172a; --neon-purple: #a855f7; --neon-blue: #38bdf8; --white-glow: #ffffff; }
+        body { background-color: var(--bg-dark); color: var(--white-glow); font-family: 'Inter', sans-serif; }
+        .font-header { font-family: 'Orbitron', sans-serif; }
+        .bright-text { color: var(--white-glow); text-shadow: 0 0 10px rgba(255, 255, 255, 0.8); }
+        .label-text { color: var(--white-glow) !important; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card-stat { background: var(--card-bg); border-top: 2px solid #1e293b; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        .card-stat:hover { border-top-color: var(--neon-blue); transform: translateY(-3px); }
+        #main-logo { transition: all 0.2s; color: var(--white-glow); text-shadow: 0 0 5px #fff; }
+        #main-logo.glow { color: var(--neon-purple); text-shadow: 0 0 20px var(--neon-purple), 0 0 40px var(--neon-purple); }
+        .filter-btn { background: #1e293b; border: 2px solid var(--neon-blue); color: var(--white-glow); transition: all 0.2s; font-size: 0.7rem; text-transform: uppercase; font-weight: 800; box-shadow: 0 0 5px rgba(56, 189, 248, 0.3); cursor: pointer; }
+        .filter-btn:hover { box-shadow: 0 0 15px var(--neon-blue); transform: scale(1.05); }
+        .filter-btn.active { background: var(--neon-blue); color: #020617; box-shadow: 0 0 20px var(--neon-blue); border-color: #fff; }
+        .btn-clear { border: 2px solid var(--neon-purple); color: var(--neon-purple); font-weight: 800; background: transparent; cursor: pointer; }
+        .btn-clear:hover { background: var(--neon-purple); color: white; box-shadow: 0 0 20px var(--neon-purple); }
+        canvas { max-height: 250px !important; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
+        <div id="main-logo" class="font-header text-4xl font-bold tracking-tighter">LOG<span class="opacity-90">CORE</span></div>
+        <div class="flex gap-4">
+            <button onclick="resetFilters()" class="btn-clear px-6 py-2 rounded-lg text-xs uppercase transition-all">Limpar Filtros</button>
+            <label class="bg-white text-black px-6 py-2 rounded-lg cursor-pointer font-bold text-xs uppercase hover:bg-sky-400 transition-all">
+                Upload de arquivo Excel
+                <input type="file" id="fileUploader" class="hidden" accept=".xlsx, .xls">
+            </label>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="card-stat p-6 rounded-xl"><p class="label-text text-[11px] mb-1">Custo Total</p><h2 id="stat-custo" class="text-2xl font-header bright-text">R$ 0</h2></div>
+        <div class="card-stat p-6 rounded-xl"><p class="label-text text-[11px] mb-1">Lucro Líquido</p><h2 id="stat-lucro" class="text-2xl font-header text-emerald-400">R$ 0</h2></div>
+        <div class="card-stat p-6 rounded-xl"><p class="label-text text-[11px] mb-1">Valor da Carga</p><h2 id="stat-carga" class="text-2xl font-header text-sky-400">R$ 0</h2></div>
+        <div class="card-stat p-6 rounded-xl"><p class="label-text text-[11px] mb-1">Peso Total (KG)</p><h2 id="stat-peso" class="text-2xl font-header text-purple-400">0 Kg</h2></div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-slate-900/60 p-5 rounded-xl border border-slate-800"><h4 class="label-text text-xs mb-4">Regiões</h4><div id="filter-region" class="flex flex-wrap gap-3"></div></div>
+        <div class="bg-slate-900/60 p-5 rounded-xl border border-slate-800"><h4 class="label-text text-xs mb-4">Status</h4><div id="filter-status" class="flex flex-wrap gap-3"></div></div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-[#0f172a] p-6 rounded-2xl border border-slate-800"><h4 class="label-text text-xs mb-6">Custo Médio por Região (Horizontal)</h4><canvas id="chartHorizontal"></canvas></div>
+        <div class="bg-[#0f172a] p-6 rounded-2xl border border-slate-800"><h4 class="label-text text-xs mb-6">Valor da Carga por Região (Vertical)</h4><canvas id="chartVertical"></canvas></div>
+        <div class="bg-[#0f172a] p-6 rounded-2xl border border-slate-800"><h4 class="label-text text-xs mb-6">Custos Operacionais por Região (Linha)</h4><canvas id="chartLine"></canvas></div>
+        <div class="bg-[#0f172a] p-6 rounded-2xl border border-slate-800"><h4 class="label-text text-xs mb-6">Volume de Entregas (Rosca)</h4><canvas id="chartDoughnut"></canvas></div>
+    </div>
+
+    <script>
+        let rawData = [];
+        let charts = {};
+        let activeFilters = { Regiões: [], 'Status da entrega': [] };
+        Chart.defaults.color = '#ffffff';
+
+        function initCharts() {
+            const common = { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { color: 'rgba(255,255,255,0.05)' } } } };
+            charts.horizontal = new Chart(document.getElementById('chartHorizontal'), { type: 'bar', data: { labels: [], datasets: [{ backgroundColor: '#38bdf8', data: [] }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, ...common } });
+            charts.vertical = new Chart(document.getElementById('chartVertical'), { type: 'bar', data: { labels: [], datasets: [{ backgroundColor: '#a855f7', data: [] }] }, options: { plugins: { legend: { display: false } }, ...common } });
+            charts.line = new Chart(document.getElementById('chartLine'), { type: 'line', data: { labels: [], datasets: [{ borderColor: '#10b981', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)' }] }, options: { plugins: { legend: { display: false } }, ...common } });
+            charts.doughnut = new Chart(document.getElementById('chartDoughnut'), { type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#38bdf8', '#a855f7', '#64748b', '#10b981'] }] }, options: { plugins: { legend: { display: true, position: 'bottom', labels: { color: '#ffffff' } } } } });
+        }
+
+        // FUNÇÃO DE PROCESSAMENTO DE DADOS
+        function processData(data) {
+            rawData = data.filter(d => d['ID Pedido']);
+            generateFilters();
+            updateDashboard();
+        }
+
+        // CARREGAMENTO AUTOMÁTICO (Para o GitHub)
+        function autoLoadFile() {
+            const fileName = 'Planilha-Controle-de-Logistica-e-Expedicao.xlsx'; 
+            fetch(fileName)
+                .then(res => {
+                    if(!res.ok) throw new Error();
+                    return res.arrayBuffer();
+                })
+                .then(ab => {
+                    const workbook = XLSX.read(ab, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(sheet, { range: 2 });
+                    processData(data);
+                    console.log("Arquivo carregado automaticamente!");
+                })
+                .catch(() => console.log("Aguardando upload manual..."));
+        }
+
+        document.getElementById('fileUploader').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const workbook = XLSX.read(evt.target.result, { type: 'binary' });
+                const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { range: 2 });
+                processData(data);
+                flashLogo();
+            };
+            reader.readAsBinaryString(e.target.files[0]);
+        });
+
+        function generateFilters() {
+            const createGroup = (id, key, filterKey) => {
+                const container = document.getElementById(id);
+                container.innerHTML = '';
+                [...new Set(rawData.map(d => d[key]))].filter(Boolean).forEach(val => {
+                    const btn = document.createElement('button');
+                    btn.className = 'filter-btn px-4 py-2 rounded-lg';
+                    btn.innerText = val;
+                    btn.onclick = () => {
+                        btn.classList.toggle('active');
+                        flashLogo();
+                        const idx = activeFilters[filterKey].indexOf(val);
+                        if(idx > -1) activeFilters[filterKey].splice(idx, 1);
+                        else activeFilters[filterKey].push(val);
+                        updateDashboard();
+                    };
+                    container.appendChild(btn);
+                });
+            };
+            createGroup('filter-region', 'Regiões', 'Regiões');
+            createGroup('filter-status', 'Status da entrega', 'Status da entrega');
+        }
+
+        function updateDashboard() {
+            let filtered = rawData;
+            if(activeFilters.Regiões.length) filtered = filtered.filter(d => activeFilters.Regiões.includes(d.Regiões));
+            if(activeFilters['Status da entrega'].length) filtered = filtered.filter(d => activeFilters['Status da entrega'].includes(d['Status da entrega']));
+
+            const sum = (key) => filtered.reduce((a, b) => a + (Number(b[key]) || 0), 0);
+            document.getElementById('stat-custo').innerText = `R$ ${sum('Custos operacionais').toLocaleString('pt-BR')}`;
+            document.getElementById('stat-lucro').innerText = `R$ ${sum('Lucro líquido').toLocaleString('pt-BR')}`;
+            document.getElementById('stat-carga').innerText = `R$ ${sum('Valor da carga').toLocaleString('pt-BR')}`;
+            document.getElementById('stat-peso').innerText = `${sum('Peso em KG').toLocaleString('pt-BR')} Kg`;
+
+            const regStats = {};
+            filtered.forEach(d => {
+                if(!regStats[d.Regiões]) regStats[d.Regiões] = { custo: 0, carga: 0 };
+                regStats[d.Regiões].custo += Number(d['Custos operacionais']) || 0;
+                regStats[d.Regiões].carga += Number(d['Valor da carga']) || 0;
+            });
+
+            const labels = Object.keys(regStats);
+            charts.horizontal.data.labels = labels;
+            charts.horizontal.data.datasets[0].data = labels.map(l => regStats[l].custo);
+            charts.vertical.data.labels = labels;
+            charts.vertical.data.datasets[0].data = labels.map(l => regStats[l].carga);
+            charts.line.data.labels = labels;
+            charts.line.data.datasets[0].data = labels.map(l => regStats[l].custo);
+            const staMap = {}; filtered.forEach(d => staMap[d['Status da entrega']] = (staMap[d['Status da entrega']] || 0) + 1);
+            charts.doughnut.data.labels = Object.keys(staMap);
+            charts.doughnut.data.datasets[0].data = Object.values(staMap);
+            Object.values(charts).forEach(c => c.update());
+        }
+
+        function flashLogo() {
+            const logo = document.getElementById('main-logo');
+            logo.classList.add('glow');
+            setTimeout(() => logo.classList.remove('glow'), 400);
+        }
+
+        function resetFilters() {
+            activeFilters = { Regiões: [], 'Status da entrega': [] };
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            updateDashboard();
+            flashLogo();
+        }
+
+        window.onload = () => {
+            initCharts();
+            autoLoadFile();
+        };
+    </script>
+</body>
+</html>
